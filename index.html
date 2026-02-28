@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Reem+Kufi:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --gold: #d4af37; --bg: #0f0f0f; --card: #1a1a1a; --text: #e0e0e0; --shadow: rgba(0,0,0,0.6);
+            --border-color: rgba(212, 175, 55, 0.3);
+        }
+        .light-mode {
+            --bg: #fdfdfd; --card: #ffffff; --text: #1a1a1a; --shadow: rgba(0,0,0,0.1);
+            --border-color: rgba(212, 175, 55, 0.2);
+        }
+
+        /* منع التكبير باللمس */
+        html, body { 
+            touch-action: pan-x pan-y; 
+            overflow-x: hidden;
+        }
+
+        body { background-color: var(--bg); color: var(--text); font-family: 'Amiri', serif; margin: 0; transition: 0.4s; user-select: none; }
+        
+        .top-nav {
+            background: var(--card); padding: 20px; border-bottom: 3px solid var(--gold);
+            position: fixed; top: -100%; width: 100%; z-index: 1000;
+            transition: 0.6s cubic-bezier(0.19, 1, 0.22, 1);
+            box-shadow: 0 10px 40px var(--shadow); border-radius: 0 0 30px 30px; box-sizing: border-box;
+            touch-action: auto; 
+        }
+
+        .top-nav.show { top: 0; }
+        .menu-trigger {
+            position: fixed; top: 15px; left: 15px; z-index: 1001;
+            background: var(--gold); color: #000; border: none; padding: 12px 20px;
+            border-radius: 50px; cursor: pointer; font-weight: bold; font-family: 'Reem Kufi';
+        }
+        .nav-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .control-item { display: flex; flex-direction: column; gap: 5px; }
+        .control-item label { font-size: 12px; color: var(--gold); font-weight: bold; }
+        select, .btn-action {
+            background: var(--bg); color: var(--text); border: 1px solid var(--gold);
+            padding: 10px; border-radius: 12px; font-family: 'Reem Kufi'; outline: none; cursor: pointer;
+            text-decoration: none; text-align: center;
+        }
+
+        /* تنسيق زر التبرع */
+        .btn-donate {
+            grid-column: span 2;
+            background: #27ae60 !important;
+            color: white !important;
+            border: none !important;
+            margin-top: 5px;
+        }
+
+        .player-container {
+            margin-top: 15px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 15px;
+            border: 1px dashed var(--gold); text-align: center;
+        }
+        audio { width: 100%; height: 30px; margin-top: 8px; }
+        .content { max-width: 90%; margin: 100px auto 40px auto; text-align: center; }
+        .surah-title { font-family: 'Reem Kufi'; color: var(--gold); font-size: 38px; margin-bottom: 15px; }
+        #qContainer {
+            font-size: 34px; line-height: 2.6; text-align: justify; direction: rtl;
+            padding: 30px; border-radius: 25px; background: var(--card);
+            box-shadow: 0 10px 30px var(--shadow); border: 1.5px solid var(--border-color);
+            position: relative; min-height: 300px;
+        }
+        #qContainer::before {
+            content: ""; position: absolute; top: 10px; left: 10px; right: 10px; bottom: 10px;
+            border: 1px solid var(--border-color); border-radius: 20px; pointer-events: none;
+        }
+        .ayah { cursor: pointer; padding: 0 5px; border-radius: 10px; transition: 0.2s; position: relative; z-index: 2; }
+        .ayah.active { background: rgba(212,175,55,0.15); color: var(--gold); font-weight: bold; }
+        .ayah-num { color: var(--gold); font-family: 'Reem Kufi'; font-size: 0.6em; margin: 0 8px; opacity: 0.8; }
+        .popup {
+            display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: var(--card); border: 2px solid var(--gold); padding: 25px;
+            z-index: 2000; width: 85%; border-radius: 25px;
+        }
+        .overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1999; }
+        #downloadProgress { font-size: 12px; color: var(--gold); margin-top: 5px; display: none; }
+    </style>
+</head>
+<body oncontextmenu="return false;">
+
+<button class="menu-trigger" onclick="toggleMenu()"><i class="fa fa-cog"></i> الإعدادات</button>
+
+<div class="top-nav" id="topNav">
+    <div class="nav-grid">
+        <div class="control-item">
+            <label>السورة</label>
+            <select id="sSelect" onchange="loadSurah(this.value)"></select>
+        </div>
+        <div class="control-item">
+            <label>المقرئ</label>
+            <select id="rSelect" onchange="loadSurah(currentS)">
+                <option value="ar.alafasy">مشاري العفاسي</option>
+                <option value="ar.abdurrahmaansudais">عبدالرحمن السديس</option>
+                <option value="ar.minshawi">محمد صديق المنشاوي</option>
+                <option value="ar.hudhaify">الحذيفي</option>
+            </select>
+        </div>
+        <div class="control-item">
+            <label>التحميل</label>
+            <button class="btn-action" onclick="downloadFullQuran()">حفظ المصحف كاملاً</button>
+            <div id="downloadProgress">جاري الحفظ...</div>
+        </div>
+        <div class="control-item">
+            <label>المظهر</label>
+            <button class="btn-action" onclick="toggleTheme()">تبديل الوضع</button>
+        </div>
+        
+        <a href="https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=xjighxrlau@gmail.com&currency_code=USD" target="_blank" class="btn-action btn-donate">
+            <i class="fa fa-heart"></i> دعم وتبرع للمشروع
+        </a>
+    </div>
+
+    <div class="player-container">
+        <div id="info" style="font-size: 13px; color: var(--gold); font-weight: bold;">بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ</div>
+        <audio id="audioMain" controls autoplay preload="auto"></audio>
+        <div style="margin-top: 10px;">
+            <button class="btn-action" onclick="changeFontSize(2)"><i class="fa fa-plus"></i></button>
+            <button class="btn-action" onclick="changeFontSize(-2)"><i class="fa fa-minus"></i></button>
+            <button class="btn-action" style="background:var(--gold); color:black;" onclick="toggleMenu()">إغلاق</button>
+        </div>
+    </div>
+</div>
+
+<div class="content">
+    <h2 id="sTitle" class="surah-title">القرآن الكريم</h2>
+    <div id="qContainer">جاري التحميل...</div>
+</div>
+
+<div id="overlay" class="overlay" onclick="closeTafseer()"></div>
+<div id="tafseerPopup" class="popup">
+    <div id="tafseerTitle" style="color:var(--gold); font-family:'Reem Kufi'; font-size:20px; border-bottom:1px solid var(--gold); padding-bottom:10px;">التفسير</div>
+    <p id="tafseerText" style="line-height:1.8; font-size:18px;"></p>
+    <button class="btn-action" style="width:100%" onclick="closeTafseer()">إغلاق</button>
+</div>
+
+<script>
+    // تعطيل التكبير في المتصفحات
+    document.addEventListener('wheel', function(event) {
+        if (event.ctrlKey) event.preventDefault();
+    }, { passive: false });
+
+    document.addEventListener('touchmove', function (event) {
+        if (event.touches.length > 1) event.preventDefault();
+    }, { passive: false });
+
+    const surahs = ["الفاتحة","البقرة","آل عمران","النساء","المائدة","الأنعام","الأعراف","الأنفال","التوبة","يونس","هود","يوسف","الرعد","إبراهيم","الحجر","النحل","الإسراء","الكهف","مريم","طه","الأنبياء","الحج","المؤمنون","النور","الفرقان","الشعراء","النمل","القصص","العنكبوت","الروم","لقمان","السجدة","الأحزاب","سبأ","فاطر","يس","الصافات","ص","الزمر","غافر","فصلت","الشورى","الزخرف","الدخان","الجاثية","الأحقاف","محمد","الفتح","الحجرات","ق","الذاريات","الطور","النجم","القمر","الرحمن","الواقعة","الحديد","المجادلة","الحشر","الممتحنة","الصف","الجمعة","المنافقون","التغابن","الطلاق","التحريم","الملك","القلم","الحاقة","المعارج","نوح","الجن","المزمل","المدثر","القيامة","الإنسان","المرسلات","النبأ","النازعات","عبس","التكوير","الانفطار","المطففين","الانشقاق","البروج","الطارق","الأعلى","الغاشية","الفجر","البلد","الشمس","الليل","الضحى","الشرح","التين","العلق","القدر","البينة","الزلزلة","العاديات","القارعة","التكاثر","العصر","الهمزة","الفيل","قريش","الماعون","الكوثر","الكافرون","النصر","المسد","الإخلاص","الفلق","الناس"];
+    let currentS = 1, currentA = 1, fontSize = 34, retryCount = 0;
+    const player = document.getElementById('audioMain');
+
+    function toggleMenu() { document.getElementById('topNav').classList.toggle('show'); }
+    function toggleTheme() {
+        document.body.classList.toggle('light-mode');
+        localStorage.setItem('theme', document.body.classList.contains('light-mode') ? 'light' : 'dark');
+    }
+    function changeFontSize(n) {
+        fontSize += n;
+        document.getElementById('qContainer').style.fontSize = fontSize + 'px';
+    }
+
+    const sSelect = document.getElementById('sSelect');
+    surahs.forEach((s, i) => {
+        let opt = document.createElement('option');
+        opt.value = i + 1; opt.text = (i+1) + ". " + s;
+        sSelect.appendChild(opt);
+    });
+
+    async function loadSurah(id) {
+        id = parseInt(id); currentS = id; sSelect.value = id;
+        const edition = 'quran-uthmani'; 
+        document.getElementById('sTitle').innerText = "سورة " + surahs[id-1];
+        const localData = localStorage.getItem(`surah_${id}_${edition}`);
+        if (localData) {
+            renderSurah(JSON.parse(localData));
+        } else {
+            try {
+                const res = await fetch(`https://api.alquran.cloud/v1/surah/${id}/${edition}`);
+                const data = await res.json();
+                renderSurah(data.data);
+                localStorage.setItem(`surah_${id}_${edition}`, JSON.stringify(data.data));
+            } catch(e) { document.getElementById('qContainer').innerText = "أنت غير متصل بالإنترنت."; }
+        }
+        playAyah(id, 1);
+    }
+
+    function renderSurah(data) {
+        document.getElementById('qContainer').innerHTML = data.ayahs.map(a =>
+            `<span class="ayah" id="v-${a.numberInSurah}" onclick="playAyah(${currentS}, ${a.numberInSurah})" ondblclick="showTafseer(${currentS}, ${a.numberInSurah})">
+                ${a.text} <span class="ayah-num">﴿${a.numberInSurah}﴾</span>
+            </span>`
+        ).join(' ');
+    }
+
+    async function playAyah(s, a) {
+        currentA = a;
+        let reciter = document.getElementById('rSelect').value;
+        let audioUrl = `https://api.alquran.cloud/v1/ayah/${s}:${a}/${reciter}`;
+        try {
+            const res = await fetch(audioUrl);
+            const data = await res.json();
+            player.src = data.data.audio;
+            player.load();
+            player.play().catch(() => {});
+            document.querySelectorAll('.ayah').forEach(el => el.classList.remove('active'));
+            const active = document.getElementById(`v-${a}`);
+            if(active) {
+                active.classList.add('active');
+                active.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            document.getElementById('info').innerText = `سورة ${surahs[s-1]} - آية ${a}`;
+        } catch(e) {}
+    }
+
+    player.onended = () => {
+        const total = document.querySelectorAll('.ayah').length;
+        if(currentA < total) playAyah(currentS, currentA + 1);
+        else if (currentS < 114) loadSurah(currentS + 1);
+    };
+
+    async function downloadFullQuran() {
+        const prog = document.getElementById('downloadProgress');
+        prog.style.display = 'block';
+        for (let i = 1; i <= 114; i++) {
+            prog.innerText = `جاري حفظ سورة ${surahs[i-1]}...`;
+            try {
+                const res = await fetch(`https://api.alquran.cloud/v1/surah/${i}/quran-uthmani`);
+                const data = await res.json();
+                localStorage.setItem(`surah_${i}_quran-uthmani`, JSON.stringify(data.data));
+            } catch(e) { break; }
+        }
+        prog.innerText = "تم الحفظ بنجاح!";
+        setTimeout(() => prog.style.display = 'none', 3000);
+    }
+
+    async function showTafseer(s, a) {
+        document.getElementById('overlay').style.display = 'block';
+        document.getElementById('tafseerPopup').style.display = 'block';
+        document.getElementById('tafseerText').innerText = "جاري التحميل...";
+        const res = await fetch(`https://api.alquran.cloud/v1/ayah/${s}:${a}/ar.jalalayn`);
+        const data = await res.json();
+        document.getElementById('tafseerText').innerText = data.data.text;
+    }
+
+    function closeTafseer() {
+        document.getElementById('overlay').style.display = 'none';
+        document.getElementById('tafseerPopup').style.display = 'none';
+    }
+
+    if(localStorage.getItem('theme') === 'light') document.body.classList.add('light-mode');
+    loadSurah(1);
+</script>
+</body>
+</html>
